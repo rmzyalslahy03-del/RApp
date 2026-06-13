@@ -4,24 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>💬 Ramz-App | المراسلة المتكاملة</title>
-    <!-- FontAwesome مع احتياطي -->
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'" onerror="loadFallbackCDN()">
+    
+    <!-- ========== تعريف دوال FontAwesome الاحتياطية قبل تحميل الخط ========== -->
+    <script>
+        // تعريف الدوال فوراً قبل أي تحميل خارجي
+        window.loadFallbackCDN = function() {
+            if (window._fallbackLoaded) return;
+            window._fallbackLoaded = true;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css';
+            document.head.appendChild(link);
+            console.log('FontAwesome fallback loaded');
+        };
+        window.onFontAwesomeLoad = function() {
+            console.log('FontAwesome primary loaded');
+        };
+    </script>
+    
+    <!-- تحميل FontAwesome مع تعريف onerror -->
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" as="style" 
+          onload="this.onload=null;this.rel='stylesheet';window.onFontAwesomeLoad()" 
+          onerror="window.loadFallbackCDN()">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></noscript>
+    
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- SQLite WASM -->
+    
+    <!-- SQLite WASM سيتم تحميله وتهيئته لاحقاً في JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.46.0/sqlite-wasm.js"></script>
-    <!-- Socket.io -->
     <script src="/socket.io/socket.io.js"></script>
+    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
         :root {
             --bg: #0d0d0d; --surface: #1a1a1a; --surface2: #222; --surface3: #2a2a2a;
             --text: #fff; --text2: #ddd; --text3: #999; --border: #2c2c2c;
-            --accent: #ff0050; --accent2: #ff6b8a; --green: #00a884; --blue-check: #4fc3f7;
-            --shadow: 0 8px 32px rgba(0,0,0,0.6); --radius: 20px; --transition: 0.25s cubic-bezier(0.4,0,0.2,1);
+            --accent: #ff0050; --green: #00a884; --blue-check: #4fc3f7;
+            --shadow: 0 8px 32px rgba(0,0,0,0.6);
         }
-        .light-theme { --bg: #f0f2f5; --surface: #fff; --surface2: #f5f5f5; --surface3: #e9edef; --text: #111; --text2: #333; --text3: #667781; --border: #e0e0e0; --shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        body { background: var(--bg); font-family: 'Cairo', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: var(--text); transition: background var(--transition); }
+        .light-theme { --bg: #f0f2f5; --surface: #fff; --surface2: #f5f5f5; --surface3: #e9edef; --text: #111; --text2: #333; --text3: #667781; --border: #e0e0e0; }
+        body { background: var(--bg); font-family: 'Cairo', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: var(--text); transition: background 0.2s; }
         .login-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 20px; transition: opacity 0.5s; }
         .login-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
         .login-logo { font-size: 58px; font-weight: 900; background: linear-gradient(135deg, #ff0050, #ff6b8a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -52,8 +74,6 @@
         .attachment-img { max-width: 200px; max-height: 150px; border-radius: 10px; margin-top: 6px; cursor: pointer; transition: transform 0.1s; }
         .attachment-img:hover { transform: scale(1.02); }
         .file-link { display: inline-flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.1); padding: 6px 10px; border-radius: 20px; text-decoration: none; color: var(--accent); font-size: 12px; margin-top: 4px; }
-        .progress-container { width: 100%; background: rgba(0,0,0,0.2); border-radius: 20px; margin-top: 6px; height: 4px; overflow: hidden; }
-        .file-progress { width: 0%; height: 4px; background: var(--green); transition: width 0.2s; }
         .date-divider { text-align: center; margin: 8px 0; font-size: 11px; color: var(--text3); background: var(--surface2); display: inline-block; padding: 4px 12px; border-radius: 12px; align-self: center; }
         .input-bar { background: var(--surface); padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); }
         .input-bar input { flex: 1; background: var(--surface3); border: none; border-radius: 25px; padding: 10px 16px; color: var(--text); font-family: inherit; font-size: 14px; outline: none; }
@@ -132,7 +152,7 @@
             </div>
         </div>
 
-        <!-- شاشة الإعدادات (مبسطة) -->
+        <!-- شاشة الإعدادات -->
         <div class="screen" id="settingsScreen">
             <div class="app-header">
                 <button class="header-btn" id="closeSettingsBtn"><i class="fas fa-arrow-right"></i></button>
@@ -145,7 +165,6 @@
         </div>
     </div>
 
-    <!-- النوافذ المنبثقة -->
     <div class="modal-overlay" id="userModal">
         <div class="modal-card">
             <div class="modal-avatar" id="modalAvatar" style="font-size: 40px; margin-bottom: 10px;">👤</div>
@@ -165,433 +184,437 @@
     </div>
 
     <script>
-        // ==================== تعريف الدوال المفقودة مسبقاً ====================
-        function loadFallbackCDN() {
-            if (window._fallbackLoaded) return;
-            window._fallbackLoaded = true;
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css';
-            document.head.appendChild(link);
-        }
-
-        function onFontAwesomeLoad() {
-            console.log('FontAwesome loaded');
-        }
-
-        // ==================== المتغيرات العامة ====================
-        let currentUser = null;
-        let currentChatId = null;
-        let socket = null;
-        let sqlite3Module = null;
-        let localDB = null;
-        let opfsRoot = null;
-        let typingTimeout = null;
-
-        const LOCAL_DB_NAME = 'chat_messagesramz.db';
-        const MEDIA_PATH = 'media/RamzApp';
-
-        // ==================== دوال OPFS ====================
-        async function initOPFS() {
-            if (!navigator.storage || !navigator.storage.getDirectory) {
-                console.warn('OPFS not supported');
+        // ==================== كود JavaScript الأساسي مع معالجة أخطاء SQLite ====================
+        (function() {
+            // المتغيرات العامة
+            window.currentUser = null;
+            window.currentChatId = null;
+            window.socket = null;
+            window.sqlite3Module = null;
+            window.localDB = null;
+            window.opfsRoot = null;
+            window.typingTimeout = null;
+            
+            const LOCAL_DB_NAME = 'chat_messagesramz.db';
+            
+            // دوال OPFS
+            async function initOPFS() {
+                if (!navigator.storage || !navigator.storage.getDirectory) {
+                    console.warn('OPFS not supported');
+                    return false;
+                }
+                window.opfsRoot = await navigator.storage.getDirectory();
+                const mediaDir = await window.opfsRoot.getDirectoryHandle('media', { create: true });
+                await mediaDir.getDirectoryHandle('RamzApp', { create: true });
+                return true;
+            }
+            
+            window.saveFileToOPFS = async function(fileBlob, fileId) {
+                const mediaDir = await window.opfsRoot.getDirectoryHandle('media', { create: true });
+                const ramzDir = await mediaDir.getDirectoryHandle('RamzApp', { create: true });
+                const fileHandle = await ramzDir.getFileHandle(fileId, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(fileBlob);
+                await writable.close();
+            };
+            
+            window.getFileFromOPFS = async function(fileId) {
+                const mediaDir = await window.opfsRoot.getDirectoryHandle('media', { create: false });
+                const ramzDir = await mediaDir.getDirectoryHandle('RamzApp', { create: false });
+                const fileHandle = await ramzDir.getFileHandle(fileId);
+                return await fileHandle.getFile();
+            };
+            
+            // تهيئة SQLite مع إعادة المحاولة
+            async function initSQLiteWithRetry(retries = 3) {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        if (!window.sqlite3InitModule) {
+                            await new Promise(r => setTimeout(r, 500));
+                            continue;
+                        }
+                        window.sqlite3Module = await window.sqlite3InitModule({ print: console.log, printErr: console.error });
+                        window.localDB = new window.sqlite3Module.oo1.OpfsDb('/' + LOCAL_DB_NAME);
+                        window.localDB.exec(`
+                            CREATE TABLE IF NOT EXISTS messages (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                messageId TEXT UNIQUE,
+                                sender TEXT NOT NULL,
+                                receiver TEXT NOT NULL,
+                                type TEXT NOT NULL,
+                                content TEXT,
+                                fileId TEXT,
+                                fileType TEXT,
+                                fileSize INTEGER,
+                                time INTEGER NOT NULL,
+                                status TEXT DEFAULT 'sending'
+                            );
+                        `);
+                        console.log('✅ Local SQLite ready');
+                        return true;
+                    } catch (err) {
+                        console.warn(`SQLite init attempt ${i+1} failed:`, err);
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                }
+                toast('⚠️ تعذر تهيئة قاعدة البيانات المحلية، بعض الميزات قد لا تعمل');
                 return false;
             }
-            opfsRoot = await navigator.storage.getDirectory();
-            const mediaDir = await opfsRoot.getDirectoryHandle('media', { create: true });
-            await mediaDir.getDirectoryHandle('RamzApp', { create: true });
-            return true;
-        }
-
-        async function saveFileToOPFS(fileBlob, fileId) {
-            const mediaDir = await opfsRoot.getDirectoryHandle('media', { create: true });
-            const ramzDir = await mediaDir.getDirectoryHandle('RamzApp', { create: true });
-            const fileHandle = await ramzDir.getFileHandle(fileId, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(fileBlob);
-            await writable.close();
-        }
-
-        async function getFileFromOPFS(fileId) {
-            const mediaDir = await opfsRoot.getDirectoryHandle('media', { create: false });
-            const ramzDir = await mediaDir.getDirectoryHandle('RamzApp', { create: false });
-            const fileHandle = await ramzDir.getFileHandle(fileId);
-            return await fileHandle.getFile();
-        }
-
-        // ==================== دوال SQLite المحلية ====================
-        async function initLocalSQLite() {
-            if (!window.sqlite3InitModule) {
-                throw new Error('SQLite not loaded yet');
-            }
-            sqlite3Module = await window.sqlite3InitModule({ print: console.log, printErr: console.error });
-            localDB = new sqlite3Module.oo1.OpfsDb('/' + LOCAL_DB_NAME);
-            localDB.exec(`
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    messageId TEXT UNIQUE,
-                    sender TEXT NOT NULL,
-                    receiver TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    content TEXT,
-                    fileId TEXT,
-                    fileType TEXT,
-                    fileSize INTEGER,
-                    time INTEGER NOT NULL,
-                    status TEXT DEFAULT 'sending'
-                );
-            `);
-            console.log('✅ Local SQLite ready');
-        }
-
-        async function saveTextMessageLocally(messageId, sender, receiver, text, time, status = 'sending') {
-            localDB.exec(`INSERT INTO messages (messageId, sender, receiver, type, content, time, status) VALUES (?, ?, ?, 'text', ?, ?, ?)`,
-                [messageId, sender, receiver, text, time, status]);
-        }
-
-        async function saveFileMessageLocally(messageId, sender, receiver, fileName, fileId, mimeType, fileSize, time, status = 'sending') {
-            localDB.exec(`INSERT INTO messages (messageId, sender, receiver, type, content, fileId, fileType, fileSize, time, status) VALUES (?, ?, ?, 'file', ?, ?, ?, ?, ?, ?)`,
-                [messageId, sender, receiver, fileName, fileId, mimeType, fileSize, time, status]);
-        }
-
-        async function updateMessageStatus(messageId, status) {
-            localDB.exec(`UPDATE messages SET status = ? WHERE messageId = ?`, [status, messageId]);
-        }
-
-        async function getAllMessagesForChat(chatId) {
-            const result = localDB.exec(`SELECT * FROM messages WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY time ASC`,
-                [currentUser, chatId, chatId, currentUser], { rowMode: 'object' });
-            return result || [];
-        }
-
-        // ==================== عرض الرسائل ====================
-        async function renderMessages() {
-            if (!currentChatId || !localDB) return;
-            const msgs = await getAllMessagesForChat(currentChatId);
-            const area = document.getElementById('messagesArea');
-            if (!area) return;
-            area.innerHTML = '';
-            let lastDate = '';
-            for (const m of msgs) {
-                const dateStr = new Date(m.time).toDateString();
-                if (dateStr !== lastDate) {
-                    area.innerHTML += `<div class="date-divider">${new Date(m.time).toLocaleDateString('ar-SA')}</div>`;
-                    lastDate = dateStr;
-                }
-                const isMe = m.sender === currentUser;
-                let statusHtml = '';
-                if (isMe) {
-                    if (m.status === 'sending') statusHtml = '<span class="msg-status">⏳</span>';
-                    else if (m.status === 'delivered') statusHtml = '<span class="msg-status"><i class="fas fa-check-double"></i></span>';
-                    else if (m.status === 'read') statusHtml = '<span class="msg-status"><i class="fas fa-check-double" style="color:#4fc3f7;"></i></span>';
-                    else statusHtml = '<span class="msg-status">❌</span>';
-                }
-                let contentHtml = '';
-                if (m.type === 'text') {
-                    contentHtml = `<div class="msg-text">${escapeHtml(m.content)}</div>`;
-                } else {
-                    try {
-                        const file = await getFileFromOPFS(m.fileId);
-                        const url = URL.createObjectURL(file);
-                        if (m.fileType && m.fileType.startsWith('image/')) {
-                            contentHtml = `<img src="${url}" class="attachment-img" onclick="window.open('${url}')">`;
-                        } else if (m.fileType && m.fileType.startsWith('video/')) {
-                            contentHtml = `<video controls src="${url}" style="max-width:200px; border-radius:10px;"></video>`;
-                        } else {
-                            contentHtml = `<a href="${url}" download="${escapeHtml(m.content)}" class="file-link"><i class="fas fa-download"></i> ${escapeHtml(m.content)} (${formatFileSize(m.fileSize)})</a>`;
-                        }
-                        setTimeout(() => URL.revokeObjectURL(url), 60000);
-                    } catch(e) {
-                        contentHtml = `<span style="color:red;">⚠️ ملف غير متوفر: ${escapeHtml(m.content)}</span>`;
+            
+            window.saveTextMessageLocally = async function(messageId, sender, receiver, text, time, status = 'sending') {
+                if (!window.localDB) return;
+                window.localDB.exec(`INSERT INTO messages (messageId, sender, receiver, type, content, time, status) VALUES (?, ?, ?, 'text', ?, ?, ?)`,
+                    [messageId, sender, receiver, text, time, status]);
+            };
+            
+            window.saveFileMessageLocally = async function(messageId, sender, receiver, fileName, fileId, mimeType, fileSize, time, status = 'sending') {
+                if (!window.localDB) return;
+                window.localDB.exec(`INSERT INTO messages (messageId, sender, receiver, type, content, fileId, fileType, fileSize, time, status) VALUES (?, ?, ?, 'file', ?, ?, ?, ?, ?, ?)`,
+                    [messageId, sender, receiver, fileName, fileId, mimeType, fileSize, time, status]);
+            };
+            
+            window.updateMessageStatus = async function(messageId, status) {
+                if (!window.localDB) return;
+                window.localDB.exec(`UPDATE messages SET status = ? WHERE messageId = ?`, [status, messageId]);
+                renderMessages();
+            };
+            
+            window.getAllMessagesForChat = async function(chatId) {
+                if (!window.localDB) return [];
+                const result = window.localDB.exec(`SELECT * FROM messages WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY time ASC`,
+                    [window.currentUser, chatId, chatId, window.currentUser], { rowMode: 'object' });
+                return result || [];
+            };
+            
+            // عرض الرسائل
+            window.renderMessages = async function() {
+                if (!window.currentChatId || !window.localDB) return;
+                const msgs = await window.getAllMessagesForChat(window.currentChatId);
+                const area = document.getElementById('messagesArea');
+                if (!area) return;
+                area.innerHTML = '';
+                let lastDate = '';
+                for (const m of msgs) {
+                    const dateStr = new Date(m.time).toDateString();
+                    if (dateStr !== lastDate) {
+                        area.innerHTML += `<div class="date-divider">${new Date(m.time).toLocaleDateString('ar-SA')}</div>`;
+                        lastDate = dateStr;
                     }
-                }
-                area.innerHTML += `
-                    <div class="msg-row ${isMe ? 'own' : 'other'}">
-                        <div class="msg-bubble">
-                            ${contentHtml}
-                            <div class="msg-time-row">
-                                <span>${new Date(m.time).toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'})}</span>
-                                ${statusHtml}
+                    const isMe = m.sender === window.currentUser;
+                    let statusHtml = '';
+                    if (isMe) {
+                        if (m.status === 'sending') statusHtml = '<span class="msg-status">⏳</span>';
+                        else if (m.status === 'delivered') statusHtml = '<span class="msg-status"><i class="fas fa-check-double"></i></span>';
+                        else if (m.status === 'read') statusHtml = '<span class="msg-status"><i class="fas fa-check-double" style="color:#4fc3f7;"></i></span>';
+                        else statusHtml = '<span class="msg-status">❌</span>';
+                    }
+                    let contentHtml = '';
+                    if (m.type === 'text') {
+                        contentHtml = `<div class="msg-text">${escapeHtml(m.content)}</div>`;
+                    } else {
+                        try {
+                            const file = await window.getFileFromOPFS(m.fileId);
+                            const url = URL.createObjectURL(file);
+                            if (m.fileType && m.fileType.startsWith('image/')) {
+                                contentHtml = `<img src="${url}" class="attachment-img" onclick="window.openImageViewer('${url}')">`;
+                            } else if (m.fileType && m.fileType.startsWith('video/')) {
+                                contentHtml = `<video controls src="${url}" style="max-width:200px; border-radius:10px;"></video>`;
+                            } else {
+                                contentHtml = `<a href="${url}" download="${escapeHtml(m.content)}" class="file-link"><i class="fas fa-download"></i> ${escapeHtml(m.content)} (${formatFileSize(m.fileSize)})</a>`;
+                            }
+                            setTimeout(() => URL.revokeObjectURL(url), 60000);
+                        } catch(e) {
+                            contentHtml = `<span style="color:red;">⚠️ ملف غير متوفر: ${escapeHtml(m.content)}</span>`;
+                        }
+                    }
+                    area.innerHTML += `
+                        <div class="msg-row ${isMe ? 'own' : 'other'}">
+                            <div class="msg-bubble">
+                                ${contentHtml}
+                                <div class="msg-time-row">
+                                    <span>${new Date(m.time).toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'})}</span>
+                                    ${statusHtml}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `;
-            }
-            area.scrollTop = area.scrollHeight;
-        }
-
-        function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
-        function formatFileSize(bytes) { if(bytes<1024) return bytes+' B'; if(bytes<1048576) return (bytes/1024).toFixed(1)+' KB'; return (bytes/1048576).toFixed(1)+' MB'; }
-
-        // ==================== إرسال الرسائل ====================
-        async function sendTextMessage(receiver, text) {
-            const messageId = Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-            const time = Date.now();
-            await saveTextMessageLocally(messageId, currentUser, receiver, text, time, 'sending');
-            await renderMessages();
-            socket.emit('send_message', { sender: currentUser, receiver, messageId, content: text, time });
-        }
-
-        async function sendFileMessage(receiver, file) {
-            const messageId = Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-            const fileId = `${messageId}_${file.name}`;
-            const time = Date.now();
-            await saveFileToOPFS(file, fileId);
-            await saveFileMessageLocally(messageId, currentUser, receiver, file.name, fileId, file.type, file.size, time, 'sending');
-            await renderMessages();
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const arrayBuffer = e.target.result;
-                socket.emit('send_file', { sender: currentUser, receiver, messageId, fileName: file.name, fileId, fileType: file.type, fileSize: file.size, time, data: arrayBuffer });
+                    `;
+                }
+                area.scrollTop = area.scrollHeight;
             };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // ==================== Socket.io ====================
-        function initSocket() {
-            socket = io();
-            socket.emit('user_online', currentUser);
-
-            socket.on('receive_message', async (data) => {
-                if (data.sender !== currentUser && data.receiver === currentUser) {
-                    await saveTextMessageLocally(data.messageId, data.sender, data.receiver, data.content, data.time, 'delivered');
-                    await renderMessages();
-                    socket.emit('read_receipt', { sender: data.sender, receiver: currentUser, messageId: data.messageId });
-                    if (currentChatId === data.sender) playNotificationSound();
-                }
-            });
-
-            socket.on('receive_file', async (data) => {
-                if (data.sender !== currentUser && data.receiver === currentUser) {
-                    const blob = new Blob([new Uint8Array(data.data)], { type: data.fileType });
-                    await saveFileToOPFS(blob, data.fileId);
-                    await saveFileMessageLocally(data.messageId, data.sender, data.receiver, data.fileName, data.fileId, data.fileType, data.fileSize, data.time, 'delivered');
-                    await renderMessages();
-                    socket.emit('read_receipt', { sender: data.sender, receiver: currentUser, messageId: data.messageId });
-                    if (currentChatId === data.sender) playNotificationSound();
-                }
-            });
-
-            socket.on('message_delivered', ({ messageId }) => {
-                updateMessageStatus(messageId, 'delivered');
-                renderMessages();
-            });
-
-            socket.on('message_read', ({ messageId }) => {
-                updateMessageStatus(messageId, 'read');
-                renderMessages();
-            });
-
-            socket.on('typing', ({ sender, isTyping }) => {
-                if (sender !== currentUser && currentChatId === sender) {
-                    const statusDiv = document.getElementById('chatStatusDisp');
-                    if (isTyping) {
-                        statusDiv.textContent = 'يكتب الآن...';
-                        statusDiv.classList.add('typing');
-                    } else {
-                        const chat = chats.find(c => c.id === sender);
-                        statusDiv.textContent = chat?.online ? 'متصل الآن' : 'غير متصل';
-                        statusDiv.classList.remove('typing');
+            
+            function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
+            function formatFileSize(bytes) { if(bytes<1024) return bytes+' B'; if(bytes<1048576) return (bytes/1024).toFixed(1)+' KB'; return (bytes/1048576).toFixed(1)+' MB'; }
+            
+            // إرسال الرسائل
+            window.sendTextMessage = async function(receiver, text) {
+                const messageId = Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+                const time = Date.now();
+                await window.saveTextMessageLocally(messageId, window.currentUser, receiver, text, time, 'sending');
+                await window.renderMessages();
+                window.socket.emit('send_message', { sender: window.currentUser, receiver, messageId, content: text, time });
+            };
+            
+            window.sendFileMessage = async function(receiver, file) {
+                const messageId = Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+                const fileId = `${messageId}_${file.name}`;
+                const time = Date.now();
+                await window.saveFileToOPFS(file, fileId);
+                await window.saveFileMessageLocally(messageId, window.currentUser, receiver, file.name, fileId, file.type, file.size, time, 'sending');
+                await window.renderMessages();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const arrayBuffer = e.target.result;
+                    window.socket.emit('send_file', { sender: window.currentUser, receiver, messageId, fileName: file.name, fileId, fileType: file.type, fileSize: file.size, time, data: arrayBuffer });
+                };
+                reader.readAsArrayBuffer(file);
+            };
+            
+            // Socket.io
+            function initSocket() {
+                window.socket = io();
+                window.socket.emit('user_online', window.currentUser);
+                
+                window.socket.on('receive_message', async (data) => {
+                    if (data.sender !== window.currentUser && data.receiver === window.currentUser) {
+                        await window.saveTextMessageLocally(data.messageId, data.sender, data.receiver, data.content, data.time, 'delivered');
+                        await window.renderMessages();
+                        window.socket.emit('read_receipt', { sender: data.sender, receiver: window.currentUser, messageId: data.messageId });
+                        if (window.currentChatId === data.sender) playNotificationSound();
                     }
-                }
-            });
-        }
-
-        function playNotificationSound() {
-            if (!window.audioCtx) {
-                window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            try {
-                const osc = window.audioCtx.createOscillator();
-                const gain = window.audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(window.audioCtx.destination);
-                osc.frequency.value = 800;
-                gain.gain.setValueAtTime(0.2, window.audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, window.audioCtx.currentTime + 0.2);
-                osc.start();
-                osc.stop(window.audioCtx.currentTime + 0.2);
-            } catch(e) {}
-        }
-
-        // ==================== مؤشر الكتابة ====================
-        function onTypingStart() {
-            if (!currentChatId || !socket) return;
-            socket.emit('typing', { sender: currentUser, receiver: currentChatId, isTyping: true });
-            if (typingTimeout) clearTimeout(typingTimeout);
-            typingTimeout = setTimeout(() => {
-                socket.emit('typing', { sender: currentUser, receiver: currentChatId, isTyping: false });
-            }, 1500);
-        }
-
-        // ==================== قائمة الدردشات ====================
-        let chats = [
-            { id: 'رمزي', name: 'رمزي', avatar: 'ر', online: true, lastMsg: '', lastTime: null },
-            { id: 'شعلان', name: 'شعلان', avatar: 'ش', online: true, lastMsg: '', lastTime: null }
-        ];
-
-        function renderChats() {
-            const container = document.getElementById('chatsList');
-            if (!container) return;
-            container.innerHTML = '';
-            chats.forEach(c => {
-                const div = document.createElement('div');
-                div.className = 'chat-item';
-                div.setAttribute('data-id', c.id);
-                div.innerHTML = `
-                    <div class="chat-avatar">${c.avatar}<span class="online-dot"></span></div>
-                    <div class="chat-info">
-                        <div class="chat-name">${escapeHtml(c.name)}</div>
-                        <div class="chat-preview"><span class="last-msg">${escapeHtml(c.lastMsg) || 'اضغط للدردشة'}</span></div>
-                    </div>
-                `;
-                div.addEventListener('click', () => openChat(c.id));
-                container.appendChild(div);
-            });
-        }
-
-        async function openChat(chatId) {
-            currentChatId = chatId;
-            const chat = chats.find(c => c.id === chatId);
-            document.getElementById('chatNameDisp').textContent = chat.name;
-            document.getElementById('chatAvatar').textContent = chat.avatar;
-            document.getElementById('chatStatusDisp').textContent = chat.online ? 'متصل الآن' : 'غير متصل';
-            await renderMessages();
-            showScreen('chat');
-        }
-
-        // ==================== دوال الواجهة ====================
-        function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId + 'Screen').classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(nav => {
-                nav.classList.toggle('active', nav.dataset.nav === screenId);
-            });
-        }
-
-        function toast(msg) {
-            const t = document.getElementById('toast');
-            if (!t) return;
-            t.textContent = msg;
-            t.classList.add('show');
-            clearTimeout(window.toastTimeout);
-            window.toastTimeout = setTimeout(() => t.classList.remove('show'), 2000);
-        }
-
-        // ==================== تسجيل الدخول ====================
-        async function onLoginSuccess(username) {
-            currentUser = username;
-            localStorage.setItem('ramz_current_user', username);
-            await initOPFS();
-            await initLocalSQLite();
-            initSocket();
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('appContainer').style.display = 'flex';
-            renderChats();
-            showScreen('chats');
-            toast(`مرحباً ${username}`);
-        }
-
-        function logout() {
-            if (socket) socket.disconnect();
-            localStorage.removeItem('ramz_current_user');
-            location.reload();
-        }
-
-        // ==================== ربط الأحداث ====================
-        document.getElementById('loginBtn').onclick = async () => {
-            const username = document.getElementById('loginNameInput').value.trim();
-            const password = document.getElementById('loginPasswordInput').value;
-            if (!username || !password) return toast('أدخل اسم المستخدم وكلمة المرور');
-            try {
-                const res = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
-                onLoginSuccess(username);
-            } catch (err) {
-                toast(err.message);
+                
+                window.socket.on('receive_file', async (data) => {
+                    if (data.sender !== window.currentUser && data.receiver === window.currentUser) {
+                        const blob = new Blob([new Uint8Array(data.data)], { type: data.fileType });
+                        await window.saveFileToOPFS(blob, data.fileId);
+                        await window.saveFileMessageLocally(data.messageId, data.sender, data.receiver, data.fileName, data.fileId, data.fileType, data.fileSize, data.time, 'delivered');
+                        await window.renderMessages();
+                        window.socket.emit('read_receipt', { sender: data.sender, receiver: window.currentUser, messageId: data.messageId });
+                        if (window.currentChatId === data.sender) playNotificationSound();
+                    }
+                });
+                
+                window.socket.on('message_delivered', ({ messageId }) => {
+                    window.updateMessageStatus(messageId, 'delivered');
+                });
+                
+                window.socket.on('message_read', ({ messageId }) => {
+                    window.updateMessageStatus(messageId, 'read');
+                });
+                
+                window.socket.on('typing', ({ sender, isTyping }) => {
+                    if (sender !== window.currentUser && window.currentChatId === sender) {
+                        const statusDiv = document.getElementById('chatStatusDisp');
+                        if (isTyping) {
+                            statusDiv.textContent = 'يكتب الآن...';
+                            statusDiv.classList.add('typing');
+                        } else {
+                            const chat = chats.find(c => c.id === sender);
+                            statusDiv.textContent = chat?.online ? 'متصل الآن' : 'غير متصل';
+                            statusDiv.classList.remove('typing');
+                        }
+                    }
+                });
             }
-        };
-
-        document.getElementById('guestBtn').onclick = () => toast('استخدم حساب رمزي أو شعلان (كلمة المرور 654321)');
-
-        document.getElementById('sendMsgBtn').onclick = () => {
-            const input = document.getElementById('msgInput');
-            if (input.value.trim() && currentChatId) {
-                sendTextMessage(currentChatId, input.value);
-                input.value = '';
-                document.getElementById('sendMsgBtn').style.display = 'none';
-                document.getElementById('micBtn').style.display = 'flex';
+            
+            function playNotificationSound() {
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.value = 800;
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.2);
+                } catch(e) {}
             }
-        };
-
-        document.getElementById('msgInput').addEventListener('input', (e) => {
-            const hasText = e.target.value.trim().length > 0;
-            document.getElementById('sendMsgBtn').style.display = hasText ? 'flex' : 'none';
-            document.getElementById('micBtn').style.display = hasText ? 'none' : 'flex';
-            if (hasText) onTypingStart();
-        });
-
-        document.getElementById('msgInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') document.getElementById('sendMsgBtn').click();
-        });
-
-        document.getElementById('backBtn').onclick = () => showScreen('chats');
-        document.getElementById('closeSettingsBtn').onclick = () => showScreen('chats');
-        document.getElementById('settingsBtn').onclick = () => showScreen('settings');
-        document.getElementById('mainMenuBtn').onclick = () => toast('القائمة قريباً');
-        document.getElementById('chatMenuBtn').onclick = () => toast('خيارات المحادثة');
-        document.getElementById('logoutBtn').onclick = logout;
-
-        document.getElementById('attachBtn').onclick = () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*,video/*,application/pdf,.txt,.docx';
-            input.onchange = async (e) => {
-                if (e.target.files && e.target.files[0] && currentChatId) {
-                    await sendFileMessage(currentChatId, e.target.files[0]);
+            
+            // مؤشر الكتابة
+            window.onTypingStart = function() {
+                if (!window.currentChatId || !window.socket) return;
+                window.socket.emit('typing', { sender: window.currentUser, receiver: window.currentChatId, isTyping: true });
+                if (window.typingTimeout) clearTimeout(window.typingTimeout);
+                window.typingTimeout = setTimeout(() => {
+                    window.socket.emit('typing', { sender: window.currentUser, receiver: window.currentChatId, isTyping: false });
+                }, 1500);
+            };
+            
+            // قائمة الدردشات
+            let chats = [
+                { id: 'رمزي', name: 'رمزي', avatar: 'ر', online: true, lastMsg: '', lastTime: null },
+                { id: 'شعلان', name: 'شعلان', avatar: 'ش', online: true, lastMsg: '', lastTime: null }
+            ];
+            
+            function renderChats() {
+                const container = document.getElementById('chatsList');
+                if (!container) return;
+                container.innerHTML = '';
+                chats.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'chat-item';
+                    div.setAttribute('data-id', c.id);
+                    div.innerHTML = `
+                        <div class="chat-avatar">${c.avatar}<span class="online-dot"></span></div>
+                        <div class="chat-info">
+                            <div class="chat-name">${escapeHtml(c.name)}</div>
+                            <div class="chat-preview"><span class="last-msg">${escapeHtml(c.lastMsg) || 'اضغط للدردشة'}</span></div>
+                        </div>
+                    `;
+                    div.addEventListener('click', () => openChat(c.id));
+                    container.appendChild(div);
+                });
+            }
+            
+            async function openChat(chatId) {
+                window.currentChatId = chatId;
+                const chat = chats.find(c => c.id === chatId);
+                document.getElementById('chatNameDisp').textContent = chat.name;
+                document.getElementById('chatAvatar').textContent = chat.avatar;
+                document.getElementById('chatStatusDisp').textContent = chat.online ? 'متصل الآن' : 'غير متصل';
+                await window.renderMessages();
+                showScreen('chat');
+            }
+            
+            // دوال الواجهة
+            function showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById(screenId + 'Screen').classList.add('active');
+                document.querySelectorAll('.nav-item').forEach(nav => {
+                    nav.classList.toggle('active', nav.dataset.nav === screenId);
+                });
+            }
+            
+            function toast(msg) {
+                const t = document.getElementById('toast');
+                if (!t) return;
+                t.textContent = msg;
+                t.classList.add('show');
+                clearTimeout(window.toastTimeout);
+                window.toastTimeout = setTimeout(() => t.classList.remove('show'), 2000);
+            }
+            window.toast = toast;
+            
+            // عارض الصور
+            window.openImageViewer = function(url) {
+                document.getElementById('viewerImage').src = url;
+                document.getElementById('imageViewer').classList.add('active');
+            };
+            
+            // تسجيل الدخول
+            async function onLoginSuccess(username) {
+                window.currentUser = username;
+                localStorage.setItem('ramz_current_user', username);
+                await initOPFS();
+                const sqliteOk = await initSQLiteWithRetry();
+                if (!sqliteOk) {
+                    toast('⚠️ تم الدخول ولكن قاعدة البيانات المحلية غير متوفرة، لن تحفظ الرسائل');
+                }
+                initSocket();
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').style.display = 'flex';
+                renderChats();
+                showScreen('chats');
+                toast(`مرحباً ${username}`);
+            }
+            
+            function logout() {
+                if (window.socket) window.socket.disconnect();
+                localStorage.removeItem('ramz_current_user');
+                location.reload();
+            }
+            
+            // ربط الأحداث
+            document.getElementById('loginBtn').onclick = async () => {
+                const username = document.getElementById('loginNameInput').value.trim();
+                const password = document.getElementById('loginPasswordInput').value;
+                if (!username || !password) return toast('أدخل اسم المستخدم وكلمة المرور');
+                try {
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error);
+                    onLoginSuccess(username);
+                } catch (err) {
+                    toast(err.message);
                 }
             };
-            input.click();
-        };
-
-        document.getElementById('micBtn').onclick = () => toast('تسجيل الصوت قريباً');
-
-        document.querySelectorAll('.nav-item').forEach(nav => {
-            nav.addEventListener('click', () => {
-                const screen = nav.dataset.nav;
-                if (screen === 'chats') showScreen('chats');
-                else if (screen === 'settings') showScreen('settings');
-            });
-        });
-
-        // إغلاق عارض الصور
-        document.getElementById('closeImageViewer').onclick = () => {
-            document.getElementById('imageViewer').classList.remove('active');
-        };
-        window.openImageViewer = (url) => {
-            document.getElementById('viewerImage').src = url;
-            document.getElementById('imageViewer').classList.add('active');
-        };
-
-        // ==================== بدء التشغيل ====================
-        (async () => {
-            const saved = localStorage.getItem('ramz_current_user');
-            if (saved) {
-                try {
-                    await onLoginSuccess(saved);
-                } catch (err) {
-                    console.error(err);
-                    toast('خطأ في استعادة الجلسة');
+            
+            document.getElementById('guestBtn').onclick = () => toast('استخدم حساب رمزي أو شعلان (كلمة المرور 654321)');
+            
+            document.getElementById('sendMsgBtn').onclick = () => {
+                const input = document.getElementById('msgInput');
+                if (input.value.trim() && window.currentChatId) {
+                    window.sendTextMessage(window.currentChatId, input.value);
+                    input.value = '';
+                    document.getElementById('sendMsgBtn').style.display = 'none';
+                    document.getElementById('micBtn').style.display = 'flex';
                 }
-            } else {
-                document.getElementById('loginScreen').classList.remove('hidden');
-                document.getElementById('appContainer').style.display = 'none';
-            }
+            };
+            
+            document.getElementById('msgInput').addEventListener('input', (e) => {
+                const hasText = e.target.value.trim().length > 0;
+                document.getElementById('sendMsgBtn').style.display = hasText ? 'flex' : 'none';
+                document.getElementById('micBtn').style.display = hasText ? 'none' : 'flex';
+                if (hasText) window.onTypingStart();
+            });
+            
+            document.getElementById('msgInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') document.getElementById('sendMsgBtn').click();
+            });
+            
+            document.getElementById('backBtn').onclick = () => showScreen('chats');
+            document.getElementById('closeSettingsBtn').onclick = () => showScreen('chats');
+            document.getElementById('settingsBtn').onclick = () => showScreen('settings');
+            document.getElementById('mainMenuBtn').onclick = () => toast('القائمة قريباً');
+            document.getElementById('chatMenuBtn').onclick = () => toast('خيارات المحادثة');
+            document.getElementById('logoutBtn').onclick = logout;
+            
+            document.getElementById('attachBtn').onclick = () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*,video/*,application/pdf,.txt,.docx';
+                input.onchange = async (e) => {
+                    if (e.target.files && e.target.files[0] && window.currentChatId) {
+                        await window.sendFileMessage(window.currentChatId, e.target.files[0]);
+                    }
+                };
+                input.click();
+            };
+            
+            document.getElementById('micBtn').onclick = () => toast('تسجيل الصوت قريباً');
+            document.getElementById('closeImageViewer').onclick = () => {
+                document.getElementById('imageViewer').classList.remove('active');
+            };
+            
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.addEventListener('click', () => {
+                    const screen = nav.dataset.nav;
+                    if (screen === 'chats') showScreen('chats');
+                    else if (screen === 'settings') showScreen('settings');
+                });
+            });
+            
+            // بدء التشغيل: التحقق من جلسة سابقة
+            (async () => {
+                const saved = localStorage.getItem('ramz_current_user');
+                if (saved) {
+                    try {
+                        await onLoginSuccess(saved);
+                    } catch (err) {
+                        console.error(err);
+                        toast('خطأ في استعادة الجلسة');
+                    }
+                } else {
+                    document.getElementById('loginScreen').classList.remove('hidden');
+                    document.getElementById('appContainer').style.display = 'none';
+                }
+            })();
         })();
     </script>
 </body>
