@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دردشة SQLite محلية - مثل واتساب</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #ece5dd;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .screen {
+            padding: 20px;
+        }
+        .hidden { display: none; }
+        h2 { margin: 0 0 15px 0; color: #075e54; }
+        input, button {
+            padding: 10px 15px;
+            border-radius: 30px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            margin: 5px 0;
+        }
+        button {
+            background-color: #25d366;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background-color: #128C7E; }
+        .chat-header {
+            background: #075e54;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #e5ddd5;
+            display: flex;
+            flex-direction: column;
+        }
+        .message {
+            max-width: 70%;
+            margin: 8px 0;
+            padding: 8px 12px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            clear: both;
+        }
+        .my-message {
+            background: #dcf8c5;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .other-message {
+            background: white;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .message small {
+            font-size: 10px;
+            color: #666;
+            display: block;
+            margin-top: 4px;
+        }
+        .input-area {
+            display: flex;
+            padding: 10px;
+            background: #f0f0f0;
+            gap: 10px;
+        }
+        .input-area input {
+            flex: 1;
+            border-radius: 30px;
+            border: 1px solid #ccc;
+        }
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 8px 10px;
+            background: #f9f9f9;
+            border-top: 1px solid #ddd;
+        }
+        .status {
+            font-size: 12px;
+            color: #555;
+            padding: 5px 10px;
+            background: #f0f0f0;
+            text-align: center;
+        }
+        .error { color: red; font-size: 14px; margin: 5px 0; }
+    </style>
+    <!-- SQLite WASM -->
+    <script src="https://cdn.jsdelivr.net/npm/@sqlite.org/sqlite-wasm@3.46.0/sqlite-wasm.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+<div class="container">
+    <div id="loginScreen" class="screen">
+        <h2>🔐 تسجيل الدخول أو إنشاء حساب</h2>
+        <input type="text" id="loginUsername" placeholder="اسم المستخدم" autocomplete="off">
+        <input type="password" id="loginPassword" placeholder="كلمة المرور">
+        <div style="display: flex; gap: 10px;">
+            <button id="loginBtn">دخول</button>
+            <button id="registerBtn" style="background:#128C7E;">إنشاء حساب</button>
+        </div>
+        <div id="loginError" class="error"></div>
+    </div>
+
+    <div id="chatScreen" class="hidden">
+        <div class="chat-header">
+            <span>💬 دردشة آمنة</span>
+            <span id="currentUserSpan"></span>
+            <button id="logoutBtn" style="background: #dc3545; padding: 5px 10px;">خروج</button>
+        </div>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="اكتب رسالتك...">
+            <button id="sendBtn">إرسال</button>
+        </div>
+        <div class="toolbar">
+            <button id="exportBtn">📁 تصدير قاعدة البيانات (sqlite)</button>
+            <input type="file" id="importFile" accept=".sqlite3,.db" style="display:none">
+            <button id="importBtn">📂 استيراد قاعدة بيانات</button>
+            <button id="clearBtn" style="background:#ff9800;">🗑️ مسح المحادثات محلياً</button>
+        </div>
+        <div id="storageStatus" class="status"></div>
+    </div>
+</div>
+
+<script>
+    // ========== المتغيرات العامة ==========
+    let currentUser = null;
+    let socket = null;
+    let sqlite3 = null;
+    let db = null;          // قاعدة بيانات SQLite المحلية (OPFS)
+
+    // ========== 1. تهيئة SQLite المحلية (OPFS) ==========
+    async function initLocalSQLite() {
+        if (!window.sqlite3InitModule) throw new Error("SQLite library not loaded");
+        sqlite3 = await window.sqlite3InitModule({
+            print: console.log,
+            printErr: console.error
+        });
+        // استخدام OPFS للتخزين الدائم - اسم قاعدة البيانات: chat_messagesramz.db
+        db = new sqlite3.oo1.OpfsDb('/chat_messagesramz.db');
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT NOT NULL,
+                text TEXT NOT NULL,
+                time INTEGER NOT NULL
+            );
+        `);
+        console.log("✅ Local SQLite (OPFS) ready with chat_messagesramz.db");
+        return true;
+    }
+
+    async function saveMessageToLocal(sender, text, time) {
+        if (!db) return;
+        db.exec("INSERT INTO messages (sender, text, time) VALUES (?, ?, ?)", [sender, text, time]);
+    }
+
+    async function getAllMessages() {
+        if (!db) return [];
+        const result = db.exec("SELECT sender, text, time FROM messages ORDER BY time ASC", { rowMode: 'object' });
+        return result;
+    }
+
+    async function clearAllMessages() {
+        if (!db) return;
+        db.exec("DELETE FROM messages");
+    }
+
+    async function exportDatabase() {
+        if (!db) return;
+        const root = await navigator.storage.getDirectory();
+        const fileHandle = await root.getFileHandle('chat_messagesramz.db', { create: false });
+        const file = await fileHandle.getFile();
+        const buffer = await file.arrayBuffer();
+        const blob = new Blob([buffer], { type: 'application/x-sqlite3' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat_backup_${new Date().toISOString().slice(0,19)}.sqlite3`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function importDatabase(file) {
+        if (!db) return;
+        const buffer = await file.arrayBuffer();
+        const root = await navigator.storage.getDirectory();
+        const fileHandle = await root.getFileHandle('chat_messagesramz.db', { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(buffer);
+        await writable.close();
+        // إعادة فتح قاعدة البيانات
+        db.close();
+        db = new sqlite3.oo1.OpfsDb('/chat_messagesramz.db');
+        // التأكد من وجود الجدول
+        try {
+            db.exec("SELECT 1 FROM messages LIMIT 1");
+        } catch(e) {
+            db.exec(`CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT NOT NULL,
+                text TEXT NOT NULL,
+                time INTEGER NOT NULL
+            );`);
+        }
+        await refreshChat();
+        alert("تم استيراد قاعدة البيانات بنجاح");
+    }
+
+    // ========== 2. عرض الرسائل ==========
+    async function refreshChat() {
+        const messages = await getAllMessages();
+        const chatBox = document.getElementById('chatBox');
+        chatBox.innerHTML = '';
+        messages.forEach(msg => {
+            const div = document.createElement('div');
+            div.className = `message ${msg.sender === currentUser ? 'my-message' : 'other-message'}`;
+            div.innerHTML = `<strong>${escapeHtml(msg.sender)}</strong><br>${escapeHtml(msg.text)}<br><small>${new Date(msg.time).toLocaleString()}</small>`;
+            chatBox.appendChild(div);
+        });
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    async function addMessage(sender, text, fromRemote = false) {
+        if (!text.trim()) return;
+        const time = Date.now();
+        await saveMessageToLocal(sender, text, time);
+        await refreshChat();
+        if (!fromRemote && socket) {
+            socket.emit('send_message', { sender, text, time });
+        }
+    }
+
+    // ========== 3. Socket.io ==========
+    function initSocket() {
+        socket = io();
+        socket.on('receive_message', async (msg) => {
+            if (msg.sender !== currentUser) {
+                await saveMessageToLocal(msg.sender, msg.text, msg.time);
+                await refreshChat();
+            }
+        });
+    }
+
+    // ========== 4. طلب التخزين الدائم ==========
+    async function requestPersistentStorage() {
+        if (navigator.storage && navigator.storage.persist) {
+            const isPersisted = await navigator.storage.persist();
+            document.getElementById('storageStatus').innerHTML = isPersisted
+                ? '✅ التخزين الدائم: ممنوح (البيانات ستبقى لسنوات)'
+                : '⚠️ التخزين الدائم: غير ممنوح (قد يحذف المتصفح البيانات عند ضغط المساحة)';
+        } else {
+            document.getElementById('storageStatus').innerHTML = 'ℹ️ متصفحك لا يدعم طلب التخزين الدائم';
+        }
+    }
+
+    // ========== 5. دوال المصادقة (REST) ==========
+    async function register(username, password) {
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        return data;
+    }
+
+    async function login(username, password) {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        return data;
+    }
+
+    // ========== 6. تبديل الواجهة ==========
+    async function onLoginSuccess(username) {
+        currentUser = username;
+        localStorage.setItem('chat_user', currentUser);
+        document.getElementById('currentUserSpan').innerText = currentUser;
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('chatScreen').classList.remove('hidden');
+        if (!db) await initLocalSQLite();
+        await refreshChat();
+        initSocket();
+        await requestPersistentStorage();
+    }
+
+    function logout() {
+        if (socket) socket.disconnect();
+        currentUser = null;
+        localStorage.removeItem('chat_user');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('chatScreen').classList.add('hidden');
+        document.getElementById('loginError').innerText = '';
+    }
+
+    // ========== 7. ربط الأحداث ==========
+    document.getElementById('loginBtn').onclick = async () => {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        try {
+            await login(username, password);
+            onLoginSuccess(username);
+        } catch (err) {
+            document.getElementById('loginError').innerText = err.message;
+        }
+    };
+    document.getElementById('registerBtn').onclick = async () => {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        try {
+            await register(username, password);
+            alert('تم إنشاء الحساب بنجاح، يمكنك تسجيل الدخول الآن');
+        } catch (err) {
+            document.getElementById('loginError').innerText = err.message;
+        }
+    };
+    document.getElementById('logoutBtn').onclick = logout;
+    document.getElementById('sendBtn').onclick = () => {
+        const input = document.getElementById('messageInput');
+        if (input.value.trim() && currentUser) {
+            addMessage(currentUser, input.value);
+            input.value = '';
+        }
+    };
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') document.getElementById('sendBtn').click();
+    });
+    document.getElementById('exportBtn').onclick = exportDatabase;
+    document.getElementById('importBtn').onclick = () => {
+        document.getElementById('importFile').click();
+    };
+    document.getElementById('importFile').onchange = async (e) => {
+        if (e.target.files.length) {
+            await importDatabase(e.target.files[0]);
+            e.target.value = '';
+        }
+    };
+    document.getElementById('clearBtn').onclick = async () => {
+        if (confirm('مسح جميع الرسائل من جهازك نهائياً؟')) {
+            await clearAllMessages();
+            await refreshChat();
+        }
+    };
+
+    // ========== 8. بدء التشغيل ==========
+    (async () => {
+        try {
+            await initLocalSQLite();
+        } catch(e) { console.warn(e); }
+        const savedUser = localStorage.getItem('chat_user');
+        if (savedUser) {
+            onLoginSuccess(savedUser);
+        }
+    })();
+</script>
+</body>
+</html>
