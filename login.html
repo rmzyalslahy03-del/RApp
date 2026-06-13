@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>تسجيل الدخول - Ramz-App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d0d0d;
+            font-family: 'Cairo', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+        .login-container {
+            background: #1a1a1a;
+            padding: 40px 30px;
+            border-radius: 30px;
+            width: 380px;
+            max-width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            text-align: center;
+        }
+        .logo {
+            font-size: 48px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ff0050, #ff6b8a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #999;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 15px 20px;
+            border-radius: 30px;
+            border: 2px solid #2c2c2c;
+            background: #222;
+            color: #fff;
+            font-family: inherit;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .input-group input:focus {
+            border-color: #ff0050;
+            box-shadow: 0 0 0 4px rgba(255,0,80,0.1);
+        }
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border-radius: 30px;
+            border: none;
+            background: linear-gradient(135deg, #ff0050, #ff6b8a);
+            color: #fff;
+            font-weight: bold;
+            font-size: 17px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 12px;
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn-guest {
+            background: transparent;
+            border: 2px solid #ff0050;
+            color: #ff0050;
+        }
+        .loader {
+            display: none;
+            margin: 10px 0;
+            color: #ff0050;
+            font-size: 14px;
+        }
+        .loader i {
+            margin-left: 8px;
+        }
+        .error {
+            color: #ff4444;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
+        .switch-link {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .switch-link span {
+            color: #ff0050;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .switch-link span:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="login-container">
+    <div class="logo">💬 Ramz-App</div>
+    <div class="subtitle">تطبيق مراسلة متكامل</div>
+
+    <!-- وضع تسجيل الدخول (افتراضي) -->
+    <div id="loginMode">
+        <div class="input-group">
+            <input type="text" id="loginUsername" placeholder="اسم المستخدم" autocomplete="off">
+        </div>
+        <div class="input-group">
+            <input type="password" id="loginPassword" placeholder="كلمة المرور">
+        </div>
+        <button class="btn" id="loginBtn">دخول</button>
+        <div class="loader" id="loginLoader"><i class="fas fa-spinner fa-pulse"></i> جاري تسجيل الدخول...</div>
+        <div class="error" id="loginError"></div>
+        <button class="btn btn-guest" id="guestBtn">دخول كضيف</button>
+        <div class="switch-link">ليس لديك حساب؟ <span id="showRegister">إنشاء حساب</span></div>
+        <div class="switch-link" style="margin-top: 10px; font-size:12px;">حسابات تجريبية: رمزي / 654321 - شعلان / 654321</div>
+    </div>
+
+    <!-- وضع التسجيل (مخفي في البداية) -->
+    <div id="registerMode" style="display:none;">
+        <div class="input-group">
+            <input type="text" id="regUsername" placeholder="اسم المستخدم الجديد">
+        </div>
+        <div class="input-group">
+            <input type="password" id="regPassword" placeholder="كلمة المرور">
+        </div>
+        <div class="input-group">
+            <input type="password" id="regConfirm" placeholder="تأكيد كلمة المرور">
+        </div>
+        <button class="btn" id="registerBtn">إنشاء حساب</button>
+        <div class="loader" id="regLoader"><i class="fas fa-spinner fa-pulse"></i> جاري إنشاء الحساب...</div>
+        <div class="error" id="regError"></div>
+        <div class="switch-link">لديك حساب بالفعل؟ <span id="showLogin">تسجيل الدخول</span></div>
+    </div>
+</div>
+
+<script>
+    const $ = (id) => document.getElementById(id);
+
+    // تبديل الوضع بين تسجيل الدخول والتسجيل
+    $('showRegister').onclick = () => {
+        $('loginMode').style.display = 'none';
+        $('registerMode').style.display = 'block';
+    };
+    $('showLogin').onclick = () => {
+        $('registerMode').style.display = 'none';
+        $('loginMode').style.display = 'block';
+    };
+
+    function showError(element, message) {
+        element.textContent = message;
+        element.style.display = 'block';
+        setTimeout(() => { element.style.display = 'none'; }, 3000);
+    }
+
+    // تسجيل الدخول
+    $('loginBtn').onclick = async () => {
+        const username = $('loginUsername').value.trim();
+        const password = $('loginPassword').value;
+        if (!username || !password) {
+            showError($('loginError'), 'يرجى إدخال اسم المستخدم وكلمة المرور');
+            return;
+        }
+        const btn = $('loginBtn');
+        const loader = $('loginLoader');
+        btn.disabled = true;
+        loader.style.display = 'block';
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            localStorage.setItem('ramz_current_user', username);
+            window.location.href = '/app';
+        } catch (err) {
+            showError($('loginError'), err.message);
+            btn.disabled = false;
+            loader.style.display = 'none';
+        }
+    };
+
+    // التسجيل
+    $('registerBtn').onclick = async () => {
+        const username = $('regUsername').value.trim();
+        const password = $('regPassword').value;
+        const confirm = $('regConfirm').value;
+        if (!username || !password) {
+            showError($('regError'), 'يرجى ملء جميع الحقول');
+            return;
+        }
+        if (password !== confirm) {
+            showError($('regError'), 'كلمة المرور غير متطابقة');
+            return;
+        }
+        if (password.length < 4) {
+            showError($('regError'), 'كلمة المرور يجب أن تكون 4 أحرف على الأقل');
+            return;
+        }
+        const btn = $('registerBtn');
+        const loader = $('regLoader');
+        btn.disabled = true;
+        loader.style.display = 'block';
+        try {
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            showError($('regError'), '✅ تم إنشاء الحساب بنجاح! يمكنك تسجيل الدخول الآن');
+            setTimeout(() => {
+                $('registerMode').style.display = 'none';
+                $('loginMode').style.display = 'block';
+                $('loginUsername').value = username;
+                $('loginPassword').value = '';
+                btn.disabled = false;
+                loader.style.display = 'none';
+                $('regError').style.display = 'none';
+            }, 1500);
+        } catch (err) {
+            showError($('regError'), err.message);
+            btn.disabled = false;
+            loader.style.display = 'none';
+        }
+    };
+
+    // دخول كضيف (محلي فقط، بدون حساب في الخادم)
+    $('guestBtn').onclick = () => {
+        const guestName = 'زائر_' + Math.random().toString(36).substr(2, 5);
+        localStorage.setItem('ramz_current_user', guestName);
+        localStorage.setItem('ramz_is_guest', 'true');
+        window.location.href = '/app';
+    };
+
+    // إدخال Enter
+    $('loginPassword').addEventListener('keypress', (e) => { if (e.key === 'Enter') $('loginBtn').click(); });
+    $('regConfirm').addEventListener('keypress', (e) => { if (e.key === 'Enter') $('registerBtn').click(); });
+</script>
+</body>
+</html>
