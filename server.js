@@ -9,9 +9,10 @@ const bcrypt = require('bcrypt');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    maxHttpBufferSize: 1e7 // 10 MB
+    maxHttpBufferSize: 1e7 // 10 MB limit for file transfers
 });
 
+// ========== 1. إعداد SQLite (قاعدة بيانات المستخدمين المركزية) ==========
 let db;
 
 async function initDatabase() {
@@ -29,6 +30,7 @@ async function initDatabase() {
     `);
     console.log('✅ SQLite server database ready (usersramz.db)');
 
+    // ========== إنشاء المستخدمين التجريبيين (رمزي، شعلان) ==========
     const testUsers = [
         { username: 'رمزي', password: '654321' },
         { username: 'شعلان', password: '654321' }
@@ -44,21 +46,29 @@ async function initDatabase() {
         }
     }
 }
-initDatabase().catch(err => console.error(err));
+initDatabase().catch(err => console.error('❌ Database init error:', err));
 
+// ========== 2. Middleware ==========
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ========== 3. API routes (تسجيل الدخول والتسجيل) ==========
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم وكلمة المرور' });
+    if (!username || !password) {
+        return res.status(400).json({ error: 'يرجى إدخال اسم المستخدم وكلمة المرور' });
+    }
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         await db.run('INSERT INTO users (username, password_hash) VALUES (?, ?)', [username, hashedPassword]);
         res.json({ success: true });
     } catch (err) {
-        if (err.message.includes('UNIQUE constraint failed')) res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' });
-        else res.status(500).json({ error: 'خطأ في الخادم' });
+        if (err.message.includes('UNIQUE constraint failed')) {
+            res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' });
+        } else {
+            console.error(err);
+            res.status(500).json({ error: 'خطأ في الخادم' });
+        }
     }
 });
 
@@ -66,16 +76,27 @@ app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
         const user = await db.get('SELECT password_hash FROM users WHERE username = ?', [username]);
-        if (!user) return res.status(401).json({ error: 'اسم المستخدم غير صحيح' });
+        if (!user) {
+            return res.status(401).json({ error: 'اسم المستخدم غير صحيح' });
+        }
         const match = await bcrypt.compare(password, user.password_hash);
-        if (!match) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
+        if (!match) {
+            return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
+        }
         res.json({ success: true, username });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'خطأ في الخادم' });
     }
 });
 
-// Store online users and their socket ids
+// ========== 4. Fallback route: أي مسار لا يبدأ بـ /api يرسل index.html ==========
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ========== 5. Socket.io (الاتصال الفوري) ==========
+// تخزين المستخدمين المتصلين و socket id الخاص بهم
 const onlineUsers = new Map(); // username -> socket.id
 
 io.on('connection', (socket) => {
@@ -88,43 +109,49 @@ io.on('connection', (socket) => {
         console.log(`✅ ${username} online`);
     });
 
-    socket.on('typing', (data) => {
-        // data: { sender, receiver, isTyping }
-        const receiverSocket = onlineUsers.get(data.receiver);
-        if (receiverSocket) {
-            io.to(receiverSocket).emit('typing', { sender: data.sender, isTyping: data.isTyping });
-        }
-    });
-
+    // إرسال رسالة نصية
     socket.on('send_message', (data) => {
-        // data: { sender, receiver, messageId, content, time, type='text' }
-        const receiverSocket = onlineUsers.get(data.receiver);
+        const { sender, receiver, messageId, content, time } = data;
+        const receiverSocket = onlineUsers.get(receiver);
         if (receiverSocket) {
-            io.to(receiverSocket).emit('receive_message', data);
-            // بعد وصول الرسالة للمستلم، إرسال إيصال استلام
-            io.to(socket.id).emit('message_delivered', { messageId: data.messageId });
+            io.to(receiverSocket).emit('receive_message', {
+                sender, receiver, messageId, content, time, type: 'text'
+            });
+            // إشعار بالإرسال للمرسل بأن الرسالة وصلت للخادم (يمكن تحسينه)
+            socket.emit('message_delivered', { messageId });
         } else {
-            // المستلم غير متصل: يمكن تخزينها مؤقتاً (سنهمل لتجنب التعقيد)
-            socket.emit('message_error', { messageId: data.messageId, error: 'المستلم غير متصل' });
+            socket.emit('message_error', { messageId, error: 'المستلم غير متصل' });
         }
     });
 
-    socket.on('send_file', async (data) => {
-        // data: { sender, receiver, messageId, fileName, fileId, mimeType, fileSize, time, data: ArrayBuffer }
-        const receiverSocket = onlineUsers.get(data.receiver);
+    // إرسال ملف (ArrayBuffer)
+    socket.on('send_file', (data) => {
+        const { sender, receiver, messageId, fileName, fileId, fileType, fileSize, time, data: fileData } = data;
+        const receiverSocket = onlineUsers.get(receiver);
         if (receiverSocket) {
-            io.to(receiverSocket).emit('receive_file', data);
-            io.to(socket.id).emit('message_delivered', { messageId: data.messageId });
+            io.to(receiverSocket).emit('receive_file', {
+                sender, receiver, messageId, fileName, fileId, fileType, fileSize, time, data: fileData
+            });
+            socket.emit('message_delivered', { messageId });
         } else {
-            socket.emit('message_error', { messageId: data.messageId, error: 'المستلم غير متصل' });
+            socket.emit('message_error', { messageId, error: 'المستلم غير متصل' });
         }
     });
 
-    socket.on('read_receipt', (data) => {
-        // data: { sender, receiver, messageId }
-        const senderSocket = onlineUsers.get(data.sender);
+    // إيصال الاستلام (delivered) يتم إرساله تلقائياً عند استلام الرسالة
+    // يمكن للعميل إرسال read_receipt عند قراءة الرسالة
+    socket.on('read_receipt', ({ sender, receiver, messageId }) => {
+        const senderSocket = onlineUsers.get(sender);
         if (senderSocket) {
-            io.to(senderSocket).emit('message_read', { messageId: data.messageId, reader: data.receiver });
+            io.to(senderSocket).emit('message_read', { messageId, reader: receiver });
+        }
+    });
+
+    // مؤشر الكتابة
+    socket.on('typing', ({ sender, receiver, isTyping }) => {
+        const receiverSocket = onlineUsers.get(receiver);
+        if (receiverSocket) {
+            io.to(receiverSocket).emit('typing', { sender, isTyping });
         }
     });
 
@@ -137,7 +164,10 @@ io.on('connection', (socket) => {
     });
 });
 
+// ========== 6. تشغيل الخادم ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 الخادم يعمل على http://localhost:${PORT}`);
+    console.log(`📁 تقديم الملفات الثابتة من: ${path.join(__dirname, 'public')}`);
+    console.log(`👥 مستخدمون تجريبيون: رمزي / 654321 ، شعلان / 654321`);
 });
